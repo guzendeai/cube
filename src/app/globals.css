@@ -1,17 +1,82 @@
+@import "tailwindcss";
+
+/*
+  ── Air Palette ─────────────────────────────────────────
+  海風・森の空気感を色と光で表現するためのデザイントークン。
+  白をベースに、淡い青灰・緑灰・砂を極わずかに混ぜる。
+  ────────────────────────────────────────────────────────
+*/
+:root {
+  /* ── ベース ── */
+  --air-bg:           #f7f8f6;
+  --air-bg-warm:      #f5f6f4;
+  --air-bg-glass:     rgba(247,248,246,0.82);
+
+  /* ── テキスト ── */
+  --air-ink:          #2c2e2b;
+  --air-ink-mid:      #606660;
+  --air-ink-light:    #9aa09a;
+  --air-ink-faint:    #bcc2bc;
+
+  /* ── ボーダー・区切り ── */
+  --air-border:       rgba(100,115,100,0.10);
+  --air-border-light: rgba(100,115,100,0.06);
+
+  /* ── 影（軽く・薄く） ── */
+  --air-shadow-sm:    0 2px 12px rgba(60,80,60,0.06);
+  --air-shadow-md:    0 8px 32px rgba(60,80,60,0.08);
+  --air-shadow-lg:    0 20px 60px rgba(40,60,40,0.10);
+
+  /* ── 背景グラデーション ── */
+  --air-glow-top:     rgba(200,215,210,0.22);
+  --air-glow-btm:     rgba(215,220,200,0.18);
+}
+
+* {
+  box-sizing: border-box;
+}
+
 html, body {
   margin: 0;
   padding: 0;
+  background: var(--air-bg);
+  color: var(--air-ink);
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-body {
-  font-family: sans-serif;
-  background: white;
-  color: black;
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 
-main {
-  min-height: 100vh;
-  display: grid;
-  place-items: center;
-  text-align: center;
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes bounceX {
+  0%, 100% { transform: translateX(0); }
+  50%       { transform: translateX(5px); }
+}
+
+@keyframes breathe {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.75; transform: scale(1.04); }
+}
+
+::-webkit-scrollbar       { width: 3px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--air-ink-faint); border-radius: 2px; }
+
+::selection {
+  background: rgba(130,160,140,0.18);
+  color: var(--air-ink);
 }
