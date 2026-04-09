@@ -46,6 +46,17 @@ export const categoryColors: Record<ContentCategory, string> = {
 
 export const contents: ContentItem[] = [
   {
+    id: 'page-words',
+    title: '言葉',
+    category: 'note',
+    description: '集めてきた言葉たち。自分の言葉と、出会った言葉と。',
+    image: '',
+    url: '/words',
+    isExternal: false,
+    tags: ['言葉'],
+    accentColor: '#8c8270',
+  },
+  {
     id: 'c01',
     title: '旅と記憶について',
     category: 'note',
