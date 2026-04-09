@@ -5,6 +5,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { contents, ContentItem, ContentCategory, categoryLabels, categoryColors } from '@/data/contents';
 import { getCategoryIcon } from '@/lib/categoryIcons';
+import PageShell from '@/components/PageShell';
 
 const CATEGORIES: ContentCategory[] = ['note', 'app', 'link', 'photo', 'video', 'activity'];
 
@@ -16,13 +17,14 @@ export default function ContentsPage() {
     : contents.filter(c => c.category === activeCategory);
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--air-bg)', padding: '0' }}>
+    <PageShell>
+    <div style={{ minHeight: '100vh', background: 'transparent', padding: '0' }}>
 
       {/* ── ヘッダー ── */}
       <div
         style={{
           borderBottom: '1px solid var(--air-border)',
-          padding: '36px 40px 28px',
+          padding: '36px clamp(16px, 5vw, 40px) 28px',
           background: 'var(--air-bg-glass)',
           backdropFilter: 'blur(12px)',
           WebkitBackdropFilter: 'blur(12px)',
@@ -94,7 +96,7 @@ export default function ContentsPage() {
       </div>
 
       {/* ── コンテンツグリッド ── */}
-      <div style={{ maxWidth: '840px', margin: '0 auto', padding: '36px 40px 80px' }}>
+      <div style={{ maxWidth: '840px', margin: '0 auto', padding: `36px clamp(16px, 5vw, 40px) 80px` }}>
         <div
           style={{
             display: 'grid',
@@ -121,6 +123,7 @@ export default function ContentsPage() {
         </div>
       </div>
     </div>
+    </PageShell>
   );
 }
 
@@ -168,7 +171,7 @@ function ContentCard({ content }: { content: ContentItem }) {
       style={{
         display: 'block',
         background: 'var(--air-bg-warm)',
-        borderRadius: '3px',
+        borderRadius: '2px',
         overflow: 'hidden',
         textDecoration: 'none',
         border: '1px solid var(--air-border)',

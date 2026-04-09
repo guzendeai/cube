@@ -236,7 +236,7 @@ export default function HomePage() {
         <Link
           href="/contents"
           style={{
-            fontSize: '10px',
+            fontSize: '12px',
             color: 'var(--air-ink-light)',
             textDecoration: 'none',
             letterSpacing: '0.14em',
@@ -244,25 +244,27 @@ export default function HomePage() {
             display: 'flex',
             alignItems: 'center',
             gap: '6px',
+            padding: '6px 0',
             transition: 'color 0.25s ease',
           }}
           onMouseEnter={e => (e.currentTarget.style.color = 'var(--air-ink)')}
           onMouseLeave={e => (e.currentTarget.style.color = 'var(--air-ink-light)')}
         >
-          <span style={{ fontSize: '13px', opacity: 0.7 }}>⊞</span>
+          <span style={{ fontSize: '14px', opacity: 0.7 }}>⊞</span>
           すべてを見る
         </Link>
 
+        {/* about リンクは /about ページ完成後に復活させる
         <div style={{ width: '1px', height: '14px', background: 'var(--air-border)' }} />
-
         <Link
           href="/about"
           style={{
-            fontSize: '10px',
+            fontSize: '12px',
             color: 'var(--air-ink-light)',
             textDecoration: 'none',
             letterSpacing: '0.14em',
             fontFamily: 'Georgia, serif',
+            padding: '6px 0',
             transition: 'color 0.25s ease',
           }}
           onMouseEnter={e => (e.currentTarget.style.color = 'var(--air-ink)')}
@@ -270,6 +272,7 @@ export default function HomePage() {
         >
           about
         </Link>
+        */}
       </div>
 
       <ContentModal

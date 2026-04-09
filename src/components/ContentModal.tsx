@@ -63,7 +63,7 @@ export default function ContentModal({ content, onClose }: ContentModalProps) {
           width: '100%',
           maxWidth: '400px',
           background: 'var(--air-bg-warm)',
-          borderRadius: '3px',
+          borderRadius: '2px',
           overflow: 'hidden',
           // 影：重くならないよう薄く・広く
           boxShadow: '0 20px 70px rgba(40,60,45,0.18), 0 4px 16px rgba(40,60,45,0.08)',
