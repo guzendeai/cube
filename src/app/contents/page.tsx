@@ -4,6 +4,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { contents, ContentItem, ContentCategory, categoryLabels, categoryColors } from '@/data/contents';
+import { getCategoryIcon } from '@/lib/categoryIcons';
 
 const CATEGORIES: ContentCategory[] = ['note', 'app', 'link', 'photo', 'video', 'activity'];
 
@@ -271,14 +272,3 @@ function ContentCard({ content }: { content: ContentItem }) {
   );
 }
 
-function getCategoryIcon(category: string): string {
-  const icons: Record<string, string> = {
-    note: '✍',
-    app: '◻',
-    link: '⬡',
-    photo: '◈',
-    video: '▷',
-    activity: '◎',
-  };
-  return icons[category] ?? '○';
-}

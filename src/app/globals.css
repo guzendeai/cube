@@ -30,6 +30,10 @@
   /* ── 背景グラデーション ── */
   --air-glow-top:     rgba(200,215,210,0.22);
   --air-glow-btm:     rgba(215,220,200,0.18);
+
+  /* ── 強調・オーバーレイ ── */
+  --air-ink-deep:     #2c3830;              /* CTAボタン・深い青緑灰 */
+  --air-overlay:      rgba(28,35,32,0.60);  /* モーダルオーバーレイ */
 }
 
 * {
@@ -41,7 +45,7 @@ html, body {
   padding: 0;
   background: var(--air-bg);
   color: var(--air-ink);
-  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', sans-serif;
+  font-family: var(--font-sans-jp), 'Hiragino Kaku Gothic ProN', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }

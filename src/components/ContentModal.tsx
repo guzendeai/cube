@@ -3,6 +3,7 @@
 // src/components/ContentModal.tsx
 import { useEffect } from 'react';
 import { ContentItem, categoryLabels, categoryColors } from '@/data/contents';
+import { getCategoryIcon } from '@/lib/categoryIcons';
 
 type ContentModalProps = {
   content: ContentItem | null;
@@ -48,7 +49,7 @@ export default function ContentModal({ content, onClose }: ContentModalProps) {
           position: 'absolute',
           inset: 0,
           // 完全な黒ではなく、深い青緑灰で覆う
-          background: 'rgba(28, 35, 32, 0.60)',
+          background: 'var(--air-overlay)',
           backdropFilter: 'blur(12px)',
           WebkitBackdropFilter: 'blur(12px)',
           animation: 'fadeIn 0.22s ease',
@@ -235,7 +236,7 @@ export default function ContentModal({ content, onClose }: ContentModalProps) {
               width: '100%',
               padding: '13px',
               // ボタン色：深い青緑灰（海の底の静かな色）
-              background: '#2c3830',
+              background: 'var(--air-ink-deep)',
               color: 'rgba(240,242,238,0.90)',
               textDecoration: 'none',
               fontSize: '12px',
@@ -245,7 +246,7 @@ export default function ContentModal({ content, onClose }: ContentModalProps) {
               transition: 'background 0.22s ease',
             }}
             onMouseEnter={e => ((e.currentTarget as HTMLAnchorElement).style.background = '#3a4840')}
-            onMouseLeave={e => ((e.currentTarget as HTMLAnchorElement).style.background = '#2c3830')}
+            onMouseLeave={e => ((e.currentTarget as HTMLAnchorElement).style.background = 'var(--air-ink-deep)')}
           >
             {content.isExternal ? '外部サイトへ' : '詳しく見る'}
             <span style={{ fontSize: '14px', opacity: 0.7 }}>
@@ -258,14 +259,3 @@ export default function ContentModal({ content, onClose }: ContentModalProps) {
   );
 }
 
-function getCategoryIcon(category: string): string {
-  const icons: Record<string, string> = {
-    note: '✍',
-    app: '◻',
-    link: '⬡',
-    photo: '◈',
-    video: '▷',
-    activity: '◎',
-  };
-  return icons[category] ?? '○';
-}

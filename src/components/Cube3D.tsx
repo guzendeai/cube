@@ -54,21 +54,31 @@ export default function Cube3D({ onFaceClick, size = 340 }: Cube3DProps) {
   const velocityRef = useRef({ x: 0, y: 0 });
   const animFrameRef = useRef<number | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  // タップ判定用: 移動距離が閾値未満かどうかを追跡する
+  const hasDraggedRef = useRef(false);
+  const currentPrimaryRef = useRef<FaceId>('front');
+  const faceContentsRef = useRef<Record<FaceId, ContentItem> | null>(null);
 
   useEffect(() => {
     const initialContents = queueRef.current.getInitialContents();
     setFaceContents(initialContents);
-    prevPrimaryFaceRef.current = getPrimaryFace(rotX, rotY);
+    faceContentsRef.current = initialContents;
+    const initial = getPrimaryFace(rotX, rotY);
+    prevPrimaryFaceRef.current = initial;
+    currentPrimaryRef.current = initial;
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const updateHiddenFace = useCallback((newRotX: number, newRotY: number) => {
     const currentPrimary = getPrimaryFace(newRotX, newRotY);
+    currentPrimaryRef.current = currentPrimary;
     if (currentPrimary !== prevPrimaryFaceRef.current) {
       const hiddenFace = OPPOSITE_FACE[currentPrimary];
       setFaceContents(prev => {
         if (!prev) return prev;
         const newContent = queueRef.current.getNext();
-        return { ...prev, [hiddenFace]: newContent };
+        const next = { ...prev, [hiddenFace]: newContent };
+        faceContentsRef.current = next;
+        return next;
       });
       prevPrimaryFaceRef.current = currentPrimary;
     }
@@ -148,6 +158,7 @@ export default function Cube3D({ onFaceClick, size = 340 }: Cube3DProps) {
     dragStartRef.current = { x: touch.clientX, y: touch.clientY, rotX, rotY };
     lastDragRef.current = { x: touch.clientX, y: touch.clientY, time: Date.now() };
     velocityRef.current = { x: 0, y: 0 };
+    hasDraggedRef.current = false;
   }, [rotX, rotY]);
 
   const handleTouchMove = useCallback((e: TouchEvent) => {
@@ -157,6 +168,11 @@ export default function Cube3D({ onFaceClick, size = 340 }: Cube3DProps) {
     const touch = e.touches[0];
     const dx = touch.clientX - dragStartRef.current.x;
     const dy = touch.clientY - dragStartRef.current.y;
+
+    // 8px超えたらドラッグとみなす
+    if (!hasDraggedRef.current && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) {
+      hasDraggedRef.current = true;
+    }
 
     const newRotY = dragStartRef.current.rotY + dx * 0.5;
     const newRotX = dragStartRef.current.rotX - dy * 0.5;
@@ -178,11 +194,19 @@ export default function Cube3D({ onFaceClick, size = 340 }: Cube3DProps) {
     if (!isDragging) return;
     setIsDragging(false);
 
+    if (!hasDraggedRef.current) {
+      // タップ: 正面の面のコンテンツを直接発火
+      const face = currentPrimaryRef.current;
+      const item = faceContentsRef.current?.[face];
+      if (item) onFaceClick(item);
+      return;
+    }
+
     if (Math.abs(velocityRef.current.x) > 0.5 || Math.abs(velocityRef.current.y) > 0.5) {
       setIsAnimating(true);
       animFrameRef.current = requestAnimationFrame(runInertia);
     }
-  }, [isDragging, runInertia]);
+  }, [isDragging, runInertia, onFaceClick]);
 
   useEffect(() => {
     window.addEventListener('mousemove', handleMouseMove);

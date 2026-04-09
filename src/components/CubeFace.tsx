@@ -2,6 +2,7 @@
 
 // src/components/CubeFace.tsx
 import { ContentItem, categoryLabels, categoryColors } from '@/data/contents';
+import { getCategoryIcon } from '@/lib/categoryIcons';
 
 type CubeFaceProps = {
   content: ContentItem;
@@ -170,14 +171,3 @@ export default function CubeFace({ content, isVisible, onClick }: CubeFaceProps)
   );
 }
 
-function getCategoryIcon(category: string): string {
-  const icons: Record<string, string> = {
-    note: '✍',
-    app: '◻',
-    link: '⬡',
-    photo: '◈',
-    video: '▷',
-    activity: '◎',
-  };
-  return icons[category] ?? '○';
-}
