@@ -47,7 +47,7 @@ const QUOTES: Quote[] = [
     speaker: '井上暁海',
     work: '汝、星のごとく',
     slides: [
-      'いつだって核心は\n言葉の届かない\n深い場所にある。',
+      'いつだって核心は\n言葉の届かない深い場所にある。',
     ],
   },
   // ── 青埜櫂（sea / 1枚）──────────────────────────────────────────────────────
@@ -77,7 +77,7 @@ const QUOTES: Quote[] = [
     speaker: '北原先生',
     work: '汝、星のごとく',
     slides: [
-      '自分を縛る鎖は\n自分で選ぶ',
+      '自分を縛る鎖は自分で選ぶ',
     ],
   },
   // ── 井上暁海（fireworks / 1枚）──────────────────────────────────────────────
@@ -87,7 +87,7 @@ const QUOTES: Quote[] = [
     speaker: '井上暁海',
     work: '汝、星のごとく',
     slides: [
-      '噂の的は\nいつも孤独だ。',
+      '噂の的はいつも孤独だ。',
     ],
   },
 ];
@@ -298,12 +298,14 @@ export default function KimiHoshiPage() {
       </div>
 
       {/* ── 話者名・作品名（各セリフ群の最後のスライドで表示） ── */}
+      {/* fireworks のときだけ右下、それ以外は左下 */}
       <div
         style={{
           position: 'absolute',
           bottom: '72px',
-          left: '32px',
-          textAlign: 'left',
+          ...(quote.bg === 'fireworks'
+            ? { right: '32px', textAlign: 'right' }
+            : { left: '32px',  textAlign: 'left'  }),
           opacity: isLastSlide ? 1 : 0,
           transition: 'opacity 0.8s ease 0.5s',
           pointerEvents: 'none',
