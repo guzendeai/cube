@@ -16,7 +16,7 @@ export const CATEGORIES: CategoryMeta[] = [
     description: '本や歌や物語の中で、\n自分の中に残ってしまった一節たち。',
     instagramLabel: '日々出会った言葉は、Instagramにも少しずつ残しています。',
     instagramButtonText: 'Instagramで言葉を見る',
-    instagramUrl: undefined,
+    instagramUrl: 'https://www.instagram.com/sehnsucht.54/?hl=ja',
   },
   {
     id: 'aruki',
@@ -24,7 +24,7 @@ export const CATEGORIES: CategoryMeta[] = [
     description: '光、風、海、街。\nいいなと思った場所へ、少し歩いてみる。',
     instagramLabel: '写真はInstagramにも少しずつ残しています。',
     instagramButtonText: 'Instagramで写真を見る',
-    instagramUrl: undefined,
+    instagramUrl: 'https://www.instagram.com/nassy_frame/?hl=ja',
   },
   {
     id: 'asobi',
