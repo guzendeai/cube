@@ -6,11 +6,12 @@ import { CATEGORIES } from '@/data/siteData';
 import CategoryPanel from '@/components/CategoryPanel';
 
 // ─── Phase state machine ──────────────────────────────────────────────────────
-// idle → attract (hover / touchstart)
-// attract → frame  (click / touchend sequence)
-// frame   → open   (after frame animation)
-// open    → idle   (on close)
-type Phase = 'idle' | 'attract' | 'frame' | 'open';
+// idle    → attract  (desktop hover)  | selected (mobile 1st tap)
+// attract → frame    (desktop click)  | idle     (unhover)
+// selected→ frame    (mobile 2nd tap same) | selected (tap different) | idle (bg tap)
+// frame   → open     (after frame animation)
+// open    → idle     (on close)
+type Phase = 'idle' | 'attract' | 'selected' | 'frame' | 'open';
 
 // ─── Positions ────────────────────────────────────────────────────────────────
 const DESKTOP_POS: Record<CategoryId, { left: string; top: string }> = {
@@ -42,8 +43,9 @@ type Dot = {
   gathering: boolean;
 };
 
-const DOT_COUNT   = 88;
-const GATHER_COUNT = 24;
+const DOT_COUNT    = 88;
+const GATHER_COUNT = 24;  // dots orbiting label during attract / selected
+const FRAME_COUNT  = 72;  // dots forming panel border during frame / open
 
 function createDots(w: number, h: number): Dot[] {
   return Array.from({ length: DOT_COUNT }, () => {
@@ -64,7 +66,6 @@ function createDots(w: number, h: number): Dot[] {
   });
 }
 
-// Positions distributed along the panel border rectangle
 function framePositions(
   px: number, py: number, pw: number, ph: number, count: number
 ): Array<{ x: number; y: number }> {
@@ -73,10 +74,10 @@ function framePositions(
   for (let i = 0; i < count; i++) {
     const t = ((i + 0.5) / count) * perim;
     let x: number, y: number;
-    if      (t < pw)           { x = px + t;              y = py; }
-    else if (t < pw + ph)      { x = px + pw;             y = py + (t - pw); }
-    else if (t < 2 * pw + ph)  { x = px + pw - (t-pw-ph); y = py + ph; }
-    else                       { x = px;                  y = py + ph - (t-2*pw-ph); }
+    if      (t < pw)           { x = px + t;               y = py; }
+    else if (t < pw + ph)      { x = px + pw;              y = py + (t - pw); }
+    else if (t < 2 * pw + ph)  { x = px + pw - (t-pw-ph);  y = py + ph; }
+    else                       { x = px;                   y = py + ph - (t-2*pw-ph); }
     pts.push({ x, y });
   }
   return pts;
@@ -87,6 +88,7 @@ type LabelProps = {
   category: CategoryMeta;
   position: { left: string; top: string };
   isHighlighted: boolean;
+  isDimmed: boolean;
   onMouseEnter: () => void;
   onMouseLeave: () => void;
   onClick: () => void;
@@ -96,7 +98,7 @@ type LabelProps = {
 };
 
 function CategoryLabel({
-  category, position, isHighlighted,
+  category, position, isHighlighted, isDimmed,
   onMouseEnter, onMouseLeave, onClick, onTouchStart, onTouchEnd, registerRef,
 }: LabelProps) {
   return (
@@ -116,7 +118,11 @@ function CategoryLabel({
         fontSize: 'clamp(15px, 2.4vw, 18px)',
         fontWeight: 300,
         letterSpacing: '0.14em',
-        color: isHighlighted ? 'rgba(255,255,255,0.92)' : 'rgba(255,255,255,0.44)',
+        color: isHighlighted
+          ? 'rgba(255,255,255,0.92)'
+          : isDimmed
+          ? 'rgba(255,255,255,0.18)'
+          : 'rgba(255,255,255,0.44)',
         textShadow: isHighlighted
           ? '0 0 20px rgba(180,210,255,0.45), 0 0 44px rgba(180,210,255,0.2)'
           : 'none',
@@ -134,7 +140,7 @@ function CategoryLabel({
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
       onClick={onClick}
-      onTouchStart={onTouchStart}
+      onTouchStart={(e) => { e.stopPropagation(); onTouchStart(); }}
       onTouchEnd={onTouchEnd}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onClick(); }}
     >
@@ -180,9 +186,9 @@ export default function HomePage() {
       const h = canvas.height;
       ctx.clearRect(0, 0, w, h);
 
-      // Faster lerp during frame phase so dots reach panel border quickly
-      const p    = phaseRef.current;
-      const lerp = (p === 'frame' || p === 'open') ? 0.10 : 0.05;
+      const p          = phaseRef.current;
+      const lerp       = (p === 'frame' || p === 'open') ? 0.10 : 0.05;
+      const isFrameOpen = p === 'frame' || p === 'open';
 
       for (const dot of dotsRef.current) {
         if (dot.gathering) {
@@ -198,8 +204,10 @@ export default function HomePage() {
           else if (dot.y > h) dot.vy = -Math.abs(dot.vy);
           dot.currentOpacity += (dot.baseOpacity - dot.currentOpacity) * 0.025;
         }
+        // Frame dots appear slightly larger / brighter when forming the border
+        const drawRadius = (dot.gathering && isFrameOpen) ? dot.radius * 1.4 : dot.radius;
         ctx.beginPath();
-        ctx.arc(dot.x, dot.y, dot.radius, 0, Math.PI * 2);
+        ctx.arc(dot.x, dot.y, drawRadius, 0, Math.PI * 2);
         ctx.fillStyle = `rgba(188,210,240,${dot.currentOpacity})`;
         ctx.fill();
       }
@@ -249,28 +257,39 @@ export default function HomePage() {
     });
   }, []);
 
-  // Move gathered dots to positions along the panel border
+  // Move FRAME_COUNT dots to positions along the panel border with outward jitter
   const doFrame = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const vw = canvas.width;
     const vh = canvas.height;
     const pw = Math.min(480, vw - 32);
-    const ph = Math.min(Math.round(vh * 0.76), 580);
+    const ph = Math.min(Math.round(vh * 0.78), 580);
     const px = (vw - pw) / 2;
     const py = (vh - ph) / 2;
+    const cx = px + pw / 2;
+    const cy = py + ph / 2;
 
-    const pts = framePositions(px, py, pw, ph, GATHER_COUNT);
-    dotsRef.current
-      .filter(d => d.gathering)
-      .forEach((dot, i) => {
-        dot.targetX = pts[i % pts.length].x;
-        dot.targetY = pts[i % pts.length].y;
-      });
+    const pts = framePositions(px, py, pw, ph, FRAME_COUNT);
+
+    // Select FRAME_COUNT nearest dots to panel centre
+    const sorted = dotsRef.current
+      .map((d, i) => ({ i, dist: Math.hypot(d.x - cx, d.y - cy) }))
+      .sort((a, b) => a.dist - b.dist);
+
+    dotsRef.current.forEach(d => { d.gathering = false; });
+    sorted.slice(0, FRAME_COUNT).forEach(({ i }, idx) => {
+      const pt = pts[idx];
+      // Push each dot slightly outward from the panel border + organic jitter
+      const angle   = Math.atan2(pt.y - cy, pt.x - cx);
+      const outward = 3 + Math.random() * 5;
+      dotsRef.current[i].gathering = true;
+      dotsRef.current[i].targetX   = pt.x + Math.cos(angle) * outward + (Math.random() - 0.5) * 4;
+      dotsRef.current[i].targetY   = pt.y + Math.sin(angle) * outward + (Math.random() - 0.5) * 4;
+    });
   }, []);
 
-  // ── Full interaction sequence ──────────────────────────────────────────────
-  // attractMs: how long to show the attract animation before proceeding
+  // ── Desktop: hover / click ────────────────────────────────────────────────
   const beginSequence = useCallback((id: CategoryId, attractMs: number) => {
     clearTimer();
     scatter();
@@ -291,7 +310,6 @@ export default function HomePage() {
     }, attractMs);
   }, [clearTimer, scatter, setPhaseSync, doGather, doFrame]);
 
-  // ── Desktop handlers ──────────────────────────────────────────────────────
   const handleMouseEnter = useCallback((id: CategoryId) => {
     if (phaseRef.current !== 'idle') return;
     activeCatRef.current = id;
@@ -301,7 +319,6 @@ export default function HomePage() {
   }, [setPhaseSync, doGather]);
 
   const handleMouseLeave = useCallback(() => {
-    // Only cancel if still in attract (not yet clicked → not in frame/open)
     if (phaseRef.current !== 'attract') return;
     clearTimer();
     scatter();
@@ -312,7 +329,6 @@ export default function HomePage() {
 
   const handleClick = useCallback((id: CategoryId) => {
     if (phaseRef.current === 'attract' && activeCatRef.current === id) {
-      // Already gathered from hover – proceed straight to frame
       clearTimer();
       setPhaseSync('frame');
       doFrame();
@@ -322,23 +338,55 @@ export default function HomePage() {
       }, 400);
       return;
     }
-    // Clicked without prior hover (keyboard, etc.)
     if (phaseRef.current === 'idle') {
       beginSequence(id, 480);
     }
   }, [clearTimer, setPhaseSync, doFrame, beginSequence]);
 
-  // ── Mobile handlers ───────────────────────────────────────────────────────
+  // ── Mobile: 2-tap logic ───────────────────────────────────────────────────
   const handleTouchBegin = useCallback((id: CategoryId) => {
-    if (phaseRef.current !== 'idle') return;
-    // Start full sequence: dots gather (320ms) → frame (400ms) → open
-    beginSequence(id, 320);
-  }, [beginSequence]);
+    if (phaseRef.current === 'idle') {
+      // 1st tap: select (dots gather around label, hint text appears)
+      scatter();
+      activeCatRef.current = id;
+      setActiveCategory(id);
+      setPhaseSync('selected');
+      doGather(id);
+    } else if (phaseRef.current === 'selected') {
+      if (activeCatRef.current === id) {
+        // 2nd tap on same label: frame → open
+        clearTimer();
+        setPhaseSync('frame');
+        doFrame();
+        seqTimerRef.current = setTimeout(() => {
+          if (phaseRef.current !== 'frame') return;
+          setPhaseSync('open');
+        }, 400);
+      } else {
+        // Tap a different label: scatter + new selection
+        scatter();
+        activeCatRef.current = id;
+        setActiveCategory(id);
+        doGather(id);
+        // phase stays 'selected'
+      }
+    }
+  }, [scatter, setPhaseSync, doGather, clearTimer, doFrame]);
 
-  // touchend only needs to prevent the browser's synthetic click event
   const handleTouchEnd = useCallback((e: React.TouchEvent) => {
     e.preventDefault();
   }, []);
+
+  // Touch on background while selected → scatter to idle
+  const handleBackgroundTouch = useCallback(() => {
+    if (phaseRef.current === 'selected') {
+      clearTimer();
+      scatter();
+      activeCatRef.current = null;
+      setActiveCategory(null);
+      setPhaseSync('idle');
+    }
+  }, [clearTimer, scatter, setPhaseSync]);
 
   // ── Close ─────────────────────────────────────────────────────────────────
   const handleClose = useCallback(() => {
@@ -353,7 +401,8 @@ export default function HomePage() {
     labelRefsMap.current.set(id, el);
   }, []);
 
-  const positions = isMobile ? MOBILE_POS : DESKTOP_POS;
+  const positions  = isMobile ? MOBILE_POS : DESKTOP_POS;
+  const hasActive  = activeCategory !== null;
 
   return (
     <div
@@ -364,6 +413,7 @@ export default function HomePage() {
         position: 'relative',
         overflow: 'hidden',
       }}
+      onTouchStart={handleBackgroundTouch}
     >
       {/* Atmospheric depth gradient */}
       <div
@@ -387,6 +437,7 @@ export default function HomePage() {
           category={cat}
           position={positions[cat.id]}
           isHighlighted={activeCategory === cat.id}
+          isDimmed={hasActive && activeCategory !== cat.id}
           onMouseEnter={() => handleMouseEnter(cat.id)}
           onMouseLeave={handleMouseLeave}
           onClick={() => handleClick(cat.id)}
@@ -396,7 +447,28 @@ export default function HomePage() {
         />
       ))}
 
-      {/* Panel — only rendered when dots have formed the frame (open phase) */}
+      {/* Hint text: shown after 1st mobile tap (selected state) */}
+      {phase === 'selected' && (
+        <div
+          style={{
+            position: 'absolute',
+            bottom: '36px',
+            left: 0,
+            right: 0,
+            textAlign: 'center',
+            fontSize: '11px',
+            color: 'rgba(255,255,255,0.18)',
+            letterSpacing: '0.12em',
+            fontFamily: 'var(--font-sans-jp), sans-serif',
+            pointerEvents: 'none',
+            animation: 'fadeIn 0.5s ease',
+          }}
+        >
+          もう一度タップして開く
+        </div>
+      )}
+
+      {/* Panel — rendered only in open phase so dots form the frame first */}
       {phase === 'open' && activeCategory && (
         <CategoryPanel
           categoryId={activeCategory}

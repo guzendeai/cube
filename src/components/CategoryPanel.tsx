@@ -29,9 +29,10 @@ const linkStyle: CSSProperties = {
   fontFamily: 'var(--font-sans-jp), sans-serif',
 };
 
+// Near-invisible border — visual separation comes from background shading
 const cardStyle: CSSProperties = {
   padding: '16px 18px',
-  border: '1px solid rgba(255,255,255,0.07)',
+  background: 'rgba(255,255,255,0.025)',
   borderRadius: '1px',
 };
 
@@ -253,11 +254,11 @@ function NagiContent() {
 function PanelContent({ categoryId }: { categoryId: CategoryId }) {
   switch (categoryId) {
     case 'kotoba': return <KotobaContent />;
-    case 'aruki': return <ArukiContent />;
-    case 'asobi': return <AsobitContent />;
-    case 'note': return <NoteContent />;
+    case 'aruki':  return <ArukiContent />;
+    case 'asobi':  return <AsobitContent />;
+    case 'note':   return <NoteContent />;
     case 'yohaku': return <YohakuContent />;
-    case 'nagi': return <NagiContent />;
+    case 'nagi':   return <NagiContent />;
   }
 }
 
@@ -265,7 +266,6 @@ export default function CategoryPanel({ categoryId, onClose }: Props) {
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
-    // Slight delay so the dots finish moving to frame positions first
     const t = setTimeout(() => setVisible(true), 40);
     return () => clearTimeout(t);
   }, []);
@@ -274,7 +274,7 @@ export default function CategoryPanel({ categoryId, onClose }: Props) {
 
   const handleClose = () => {
     setVisible(false);
-    // onClose scatters dots + resets phase after fade-out completes
+    // Dots scatter after panel fades out
     setTimeout(onClose, 300);
   };
 
@@ -293,32 +293,24 @@ export default function CategoryPanel({ categoryId, onClose }: Props) {
       }}
       onClick={handleClose}
     >
-      {/* Backdrop */}
-      <div
-        style={{
-          position: 'absolute',
-          inset: 0,
-          background: 'rgba(4, 5, 10, 0.65)',
-          backdropFilter: 'blur(5px)',
-          WebkitBackdropFilter: 'blur(5px)',
-        }}
-      />
+      {/* No full-screen backdrop — frame dots on canvas remain visible */}
 
-      {/* Panel — border echoes where the dots are sitting */}
+      {/* Panel */}
       <div
+        className="panel-scroll"
         style={{
           position: 'relative',
           zIndex: 1,
           width: 'min(480px, calc(100vw - 32px))',
           maxHeight: '80dvh',
           overflowY: 'auto',
-          background: 'rgba(9, 11, 20, 0.90)',
-          border: '1px solid rgba(255, 255, 255, 0.10)',
+          background: 'rgba(6, 8, 18, 0.96)',
+          border: '1px solid rgba(255,255,255,0.04)',
           borderRadius: '1px',
           padding: 'clamp(28px, 5vw, 44px) clamp(24px, 5vw, 40px)',
           transform: visible ? 'scale(1) translateY(0)' : 'scale(0.96) translateY(12px)',
           transition: 'transform 0.30s ease',
-          boxShadow: '0 0 40px rgba(100,140,220,0.07), inset 0 0 0 1px rgba(255,255,255,0.03)',
+          boxShadow: '0 12px 60px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.03)',
         }}
         onClick={e => e.stopPropagation()}
       >

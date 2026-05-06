@@ -80,6 +80,9 @@ html, body {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--air-ink-faint); border-radius: 2px; }
 
+/* Dark scrollbar for the panel (dark background) */
+.panel-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); }
+
 ::selection {
   background: rgba(130,160,140,0.18);
   color: var(--air-ink);
