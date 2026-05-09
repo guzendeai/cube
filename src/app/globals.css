@@ -43,8 +43,8 @@
 html, body {
   margin: 0;
   padding: 0;
-  background: var(--air-bg);
-  color: var(--air-ink);
+  background: #f0ebe0;
+  color: rgba(28,22,14,0.85);
   font-family: var(--font-sans-jp), 'Hiragino Kaku Gothic ProN', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -78,10 +78,10 @@ html, body {
 
 ::-webkit-scrollbar       { width: 3px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--air-ink-faint); border-radius: 2px; }
+::-webkit-scrollbar-thumb { background: rgba(28,22,14,0.18); border-radius: 2px; }
 
-/* Dark scrollbar for the panel (dark background) */
-.panel-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); }
+/* Panel scroll (same light theme) */
+.panel-scroll::-webkit-scrollbar-thumb { background: rgba(28,22,14,0.18); }
 
 ::selection {
   background: rgba(130,160,140,0.18);

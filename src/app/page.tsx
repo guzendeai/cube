@@ -1,19 +1,20 @@
 'use client';
 
 import { useRef, useEffect, useState, useCallback } from 'react';
-import type { CategoryId, CategoryMeta } from '@/types';
+import type { CategoryId } from '@/types';
 import { CATEGORIES } from '@/data/siteData';
 import CategoryPanel from '@/components/CategoryPanel';
+import { ParticleSystem, MOTIFS } from '@/lib/particles';
 
-// ─── Phase state machine ──────────────────────────────────────────────────────
-// idle    → attract  (desktop hover)  | selected (mobile 1st tap)
-// attract → frame    (desktop click)  | idle     (unhover)
-// selected→ frame    (mobile 2nd tap same) | selected (tap different) | idle (bg tap)
-// frame   → open     (after frame animation)
-// open    → idle     (on close)
-type Phase = 'idle' | 'attract' | 'selected' | 'frame' | 'open';
+// ─── Stage machine ────────────────────────────────────────────────────────────
+// forming   → formed      (5s after setMotif)
+// formed    → dissolving  (user interaction OR 15s idle)
+// dissolving→ forming     (if cycle < 3) | content (cycle === 3)
+// content   → panel       (category clicked)
+// panel     → content     (panel closed)
+type Stage = 'forming' | 'formed' | 'dissolving' | 'content' | 'panel';
 
-// ─── Positions ────────────────────────────────────────────────────────────────
+// ─── Category positions ───────────────────────────────────────────────────────
 const DESKTOP_POS: Record<CategoryId, { left: string; top: string }> = {
   kotoba: { left: '20%', top: '27%' },
   aruki:  { left: '62%', top: '21%' },
@@ -32,447 +33,263 @@ const MOBILE_POS: Record<CategoryId, { left: string; top: string }> = {
   nagi:   { left: '68%', top: '78%' },
 };
 
-// ─── Dot type ─────────────────────────────────────────────────────────────────
-type Dot = {
-  x: number; y: number;
-  vx: number; vy: number;
-  targetX: number; targetY: number;
-  radius: number;
-  baseOpacity: number;
-  currentOpacity: number;
-  gathering: boolean;
-};
-
-const DOT_COUNT    = 88;
-const GATHER_COUNT = 24;  // dots orbiting label during attract / selected
-const FRAME_COUNT  = 72;  // dots forming panel border during frame / open
-
-function createDots(w: number, h: number): Dot[] {
-  return Array.from({ length: DOT_COUNT }, () => {
-    const speed = 0.05 + Math.random() * 0.12;
-    const angle = Math.random() * Math.PI * 2;
-    const x = Math.random() * w;
-    const y = Math.random() * h;
-    const opacity = 0.1 + Math.random() * 0.28;
-    return {
-      x, y,
-      vx: Math.cos(angle) * speed,
-      vy: Math.sin(angle) * speed,
-      targetX: x, targetY: y,
-      radius: 0.8 + Math.random() * 1.5,
-      baseOpacity: opacity, currentOpacity: opacity,
-      gathering: false,
-    };
-  });
-}
-
-function framePositions(
-  px: number, py: number, pw: number, ph: number, count: number
-): Array<{ x: number; y: number }> {
-  const pts: Array<{ x: number; y: number }> = [];
-  const perim = 2 * (pw + ph);
-  for (let i = 0; i < count; i++) {
-    const t = ((i + 0.5) / count) * perim;
-    let x: number, y: number;
-    if      (t < pw)           { x = px + t;               y = py; }
-    else if (t < pw + ph)      { x = px + pw;              y = py + (t - pw); }
-    else if (t < 2 * pw + ph)  { x = px + pw - (t-pw-ph);  y = py + ph; }
-    else                       { x = px;                   y = py + ph - (t-2*pw-ph); }
-    pts.push({ x, y });
-  }
-  return pts;
-}
-
-// ─── CategoryLabel ────────────────────────────────────────────────────────────
-type LabelProps = {
-  category: CategoryMeta;
-  position: { left: string; top: string };
-  isHighlighted: boolean;
-  isDimmed: boolean;
-  onMouseEnter: () => void;
-  onMouseLeave: () => void;
-  onClick: () => void;
-  onTouchStart: () => void;
-  onTouchEnd: (e: React.TouchEvent) => void;
-  registerRef: (el: HTMLElement | null) => void;
-};
-
-function CategoryLabel({
-  category, position, isHighlighted, isDimmed,
-  onMouseEnter, onMouseLeave, onClick, onTouchStart, onTouchEnd, registerRef,
-}: LabelProps) {
-  return (
-    <div
-      ref={registerRef}
-      role="button"
-      tabIndex={0}
-      aria-label={category.label}
-      style={{
-        position: 'absolute',
-        left: position.left,
-        top: position.top,
-        transform: 'translate(-50%, -50%)',
-        cursor: 'pointer',
-        userSelect: 'none',
-        fontFamily: 'var(--font-serif-jp), "Noto Serif JP", serif',
-        fontSize: 'clamp(15px, 2.4vw, 18px)',
-        fontWeight: 300,
-        letterSpacing: '0.14em',
-        color: isHighlighted
-          ? 'rgba(255,255,255,0.92)'
-          : isDimmed
-          ? 'rgba(255,255,255,0.18)'
-          : 'rgba(255,255,255,0.44)',
-        textShadow: isHighlighted
-          ? '0 0 20px rgba(180,210,255,0.45), 0 0 44px rgba(180,210,255,0.2)'
-          : 'none',
-        transition: 'color 0.38s ease, text-shadow 0.38s ease',
-        padding: '12px 16px',
-        zIndex: 10,
-        minWidth: '44px',
-        minHeight: '44px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        WebkitTapHighlightColor: 'transparent',
-        touchAction: 'manipulation',
-      }}
-      onMouseEnter={onMouseEnter}
-      onMouseLeave={onMouseLeave}
-      onClick={onClick}
-      onTouchStart={(e) => { e.stopPropagation(); onTouchStart(); }}
-      onTouchEnd={onTouchEnd}
-      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onClick(); }}
-    >
-      {category.label}
-    </div>
-  );
-}
-
 // ─── HomePage ─────────────────────────────────────────────────────────────────
 export default function HomePage() {
-  const canvasRef     = useRef<HTMLCanvasElement>(null);
-  const dotsRef       = useRef<Dot[]>([]);
-  const labelRefsMap  = useRef<Map<CategoryId, HTMLElement | null>>(new Map());
-  const phaseRef      = useRef<Phase>('idle');
-  const activeCatRef  = useRef<CategoryId | null>(null);
-  const seqTimerRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const canvasRef        = useRef<HTMLCanvasElement>(null);
+  const sysRef           = useRef<ParticleSystem | null>(null);
+  const stageRef         = useRef<Stage>('forming');
+  const cycleRef         = useRef(0);            // 0–2; at 3 → content
+  const isMobileRef      = useRef(false);
+  const formTimerRef     = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const idleTimerRef     = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastPointerRef   = useRef({ x: 0, y: 0, t: 0 });
+  const selectedMotifsRef = useRef(
+    [...MOTIFS].sort(() => Math.random() - 0.5).slice(0, 3)
+  );
 
-  const [phase, setPhase]               = useState<Phase>('idle');
+  const [stage, setStage]               = useState<Stage>('forming');
+  const [labelsVisible, setLabelsVisible] = useState(false);
   const [activeCategory, setActiveCategory] = useState<CategoryId | null>(null);
   const [isMobile, setIsMobile]         = useState(false);
-  const [mounted, setMounted]           = useState(false);
 
-  // ── Canvas + animation loop ───────────────────────────────────────────────
+  const clearTimers = useCallback(() => {
+    if (formTimerRef.current)  { clearTimeout(formTimerRef.current);  formTimerRef.current  = null; }
+    if (idleTimerRef.current)  { clearTimeout(idleTimerRef.current);  idleTimerRef.current  = null; }
+  }, []);
+
+  const setStageSync = useCallback((s: Stage) => {
+    stageRef.current = s;
+    setStage(s);
+  }, []);
+
+  // ── Advance to next stage after dissolution completes ──────────────────────
+  const onDissolveComplete = useCallback(() => {
+    const nextCycle = cycleRef.current + 1;
+    cycleRef.current = nextCycle;
+
+    if (nextCycle < 3) {
+      // Form next motif
+      setStageSync('forming');
+      sysRef.current?.setMotif(selectedMotifsRef.current[nextCycle]);
+      formTimerRef.current = setTimeout(() => {
+        if (stageRef.current !== 'forming') return;
+        setStageSync('formed');
+        idleTimerRef.current = setTimeout(() => triggerDissolveRef.current(), 15000);
+      }, 5000);
+    } else {
+      // All 3 motifs done → form content clusters
+      setStageSync('content');
+      const mobile = isMobileRef.current;
+      const pos = mobile ? MOBILE_POS : DESKTOP_POS;
+      sysRef.current?.formClusters(
+        CATEGORIES.map(cat => ({
+          id: cat.id,
+          x: parseFloat(pos[cat.id as CategoryId].left) / 100,
+          y: parseFloat(pos[cat.id as CategoryId].top)  / 100,
+          weight: 1,
+        }))
+      );
+      // Labels fade in after particles have had time to cluster
+      formTimerRef.current = setTimeout(() => setLabelsVisible(true), 3000);
+    }
+  }, [setStageSync]);
+
+  // Store in ref so dissolution callback doesn't capture stale closure
+  const triggerDissolveRef = useRef<() => void>(() => {});
+
+  const triggerDissolve = useCallback(() => {
+    if (stageRef.current !== 'formed' && stageRef.current !== 'forming') return;
+    clearTimers();
+    setStageSync('dissolving');
+    sysRef.current?.dissolve(onDissolveComplete);
+  }, [clearTimers, setStageSync, onDissolveComplete]);
+
+  useEffect(() => {
+    triggerDissolveRef.current = triggerDissolve;
+  }, [triggerDissolve]);
+
+  // ── Canvas + particle system setup ─────────────────────────────────────────
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
 
-    const resize = () => {
+    const mobile = window.innerWidth < 768;
+    isMobileRef.current = mobile;
+    setIsMobile(mobile);
+
+    canvas.width  = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    const sys = new ParticleSystem(canvas, mobile ? 1800 : 3200);
+    sysRef.current = sys;
+    sys.start();
+
+    // Begin first motif
+    sys.setMotif(selectedMotifsRef.current[0]);
+    formTimerRef.current = setTimeout(() => {
+      if (stageRef.current !== 'forming') return;
+      setStageSync('formed');
+      idleTimerRef.current = setTimeout(() => triggerDissolveRef.current(), 15000);
+    }, 5500);
+
+    const handleResize = () => {
       canvas.width  = window.innerWidth;
       canvas.height = window.innerHeight;
-      setIsMobile(window.innerWidth < 768);
+      const m = window.innerWidth < 768;
+      isMobileRef.current = m;
+      setIsMobile(m);
+      sys.resize();
     };
-    resize();
-    dotsRef.current = createDots(canvas.width, canvas.height);
-    window.addEventListener('resize', resize);
-    setMounted(true);
-
-    let animId: number;
-    const animate = () => {
-      const w = canvas.width;
-      const h = canvas.height;
-      ctx.clearRect(0, 0, w, h);
-
-      const p          = phaseRef.current;
-      const lerp       = (p === 'frame' || p === 'open') ? 0.10 : 0.05;
-      const isFrameOpen = p === 'frame' || p === 'open';
-
-      for (const dot of dotsRef.current) {
-        if (dot.gathering) {
-          dot.x += (dot.targetX - dot.x) * lerp;
-          dot.y += (dot.targetY - dot.y) * lerp;
-          dot.currentOpacity += (0.68 - dot.currentOpacity) * 0.05;
-        } else {
-          dot.x += dot.vx;
-          dot.y += dot.vy;
-          if (dot.x < 0) dot.vx = Math.abs(dot.vx);
-          else if (dot.x > w) dot.vx = -Math.abs(dot.vx);
-          if (dot.y < 0) dot.vy = Math.abs(dot.vy);
-          else if (dot.y > h) dot.vy = -Math.abs(dot.vy);
-          dot.currentOpacity += (dot.baseOpacity - dot.currentOpacity) * 0.025;
-        }
-        // Frame dots appear slightly larger / brighter when forming the border
-        const drawRadius = (dot.gathering && isFrameOpen) ? dot.radius * 1.4 : dot.radius;
-        ctx.beginPath();
-        ctx.arc(dot.x, dot.y, drawRadius, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(188,210,240,${dot.currentOpacity})`;
-        ctx.fill();
-      }
-      animId = requestAnimationFrame(animate);
-    };
-    animId = requestAnimationFrame(animate);
+    window.addEventListener('resize', handleResize);
 
     return () => {
-      window.removeEventListener('resize', resize);
-      cancelAnimationFrame(animId);
+      window.removeEventListener('resize', handleResize);
+      clearTimers();
+      sys.destroy();
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── Phase helpers ─────────────────────────────────────────────────────────
-  const setPhaseSync = useCallback((p: Phase) => {
-    phaseRef.current = p;
-    setPhase(p);
+  // ── Pointer interaction ────────────────────────────────────────────────────
+  const handlePointerDown = useCallback((x: number, y: number) => {
+    lastPointerRef.current = { x, y, t: Date.now() };
   }, []);
 
-  const clearTimer = useCallback(() => {
-    if (seqTimerRef.current) { clearTimeout(seqTimerRef.current); seqTimerRef.current = null; }
-  }, []);
+  const handlePointerMove = useCallback((x: number, y: number) => {
+    const now = Date.now();
+    const dt  = Math.max(1, now - lastPointerRef.current.t);
+    const velX = (x - lastPointerRef.current.x) / dt * 16;
+    const velY = (y - lastPointerRef.current.y) / dt * 16;
+    lastPointerRef.current = { x, y, t: now };
 
-  const scatter = useCallback(() => {
-    dotsRef.current.forEach(d => { d.gathering = false; });
-  }, []);
-
-  // Move GATHER_COUNT dots toward the label centre
-  const doGather = useCallback((id: CategoryId) => {
-    const el = labelRefsMap.current.get(id);
-    if (!el) return;
-    const rect = el.getBoundingClientRect();
-    const cx = rect.left + rect.width  / 2;
-    const cy = rect.top  + rect.height / 2;
-
-    const sorted = dotsRef.current
-      .map((d, i) => ({ i, dist: Math.hypot(d.x - cx, d.y - cy) }))
-      .sort((a, b) => a.dist - b.dist);
-
-    dotsRef.current.forEach(d => { d.gathering = false; });
-    sorted.slice(0, GATHER_COUNT).forEach(({ i }, idx) => {
-      const angle = (idx / GATHER_COUNT) * Math.PI * 2 + (Math.random() - 0.5) * 0.5;
-      const r     = 26 + Math.floor(idx / 8) * 18 + Math.random() * 10;
-      dotsRef.current[i].gathering = true;
-      dotsRef.current[i].targetX   = cx + Math.cos(angle) * r;
-      dotsRef.current[i].targetY   = cy + Math.sin(angle) * r;
-    });
-  }, []);
-
-  // Move FRAME_COUNT dots to positions along the panel border with outward jitter
-  const doFrame = useCallback(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const vw = canvas.width;
-    const vh = canvas.height;
-    const pw = Math.min(480, vw - 32);
-    const ph = Math.min(Math.round(vh * 0.78), 580);
-    const px = (vw - pw) / 2;
-    const py = (vh - ph) / 2;
-    const cx = px + pw / 2;
-    const cy = py + ph / 2;
-
-    const pts = framePositions(px, py, pw, ph, FRAME_COUNT);
-
-    // Select FRAME_COUNT nearest dots to panel centre
-    const sorted = dotsRef.current
-      .map((d, i) => ({ i, dist: Math.hypot(d.x - cx, d.y - cy) }))
-      .sort((a, b) => a.dist - b.dist);
-
-    dotsRef.current.forEach(d => { d.gathering = false; });
-    sorted.slice(0, FRAME_COUNT).forEach(({ i }, idx) => {
-      const pt = pts[idx];
-      // Push each dot slightly outward from the panel border + organic jitter
-      const angle   = Math.atan2(pt.y - cy, pt.x - cx);
-      const outward = 3 + Math.random() * 5;
-      dotsRef.current[i].gathering = true;
-      dotsRef.current[i].targetX   = pt.x + Math.cos(angle) * outward + (Math.random() - 0.5) * 4;
-      dotsRef.current[i].targetY   = pt.y + Math.sin(angle) * outward + (Math.random() - 0.5) * 4;
-    });
-  }, []);
-
-  // ── Desktop: hover / click ────────────────────────────────────────────────
-  const beginSequence = useCallback((id: CategoryId, attractMs: number) => {
-    clearTimer();
-    scatter();
-    activeCatRef.current = id;
-    setActiveCategory(id);
-    setPhaseSync('attract');
-    doGather(id);
-
-    seqTimerRef.current = setTimeout(() => {
-      if (phaseRef.current !== 'attract' || activeCatRef.current !== id) return;
-      setPhaseSync('frame');
-      doFrame();
-
-      seqTimerRef.current = setTimeout(() => {
-        if (phaseRef.current !== 'frame' || activeCatRef.current !== id) return;
-        setPhaseSync('open');
-      }, 400);
-    }, attractMs);
-  }, [clearTimer, scatter, setPhaseSync, doGather, doFrame]);
-
-  const handleMouseEnter = useCallback((id: CategoryId) => {
-    if (phaseRef.current !== 'idle') return;
-    activeCatRef.current = id;
-    setActiveCategory(id);
-    setPhaseSync('attract');
-    doGather(id);
-  }, [setPhaseSync, doGather]);
-
-  const handleMouseLeave = useCallback(() => {
-    if (phaseRef.current !== 'attract') return;
-    clearTimer();
-    scatter();
-    activeCatRef.current = null;
-    setActiveCategory(null);
-    setPhaseSync('idle');
-  }, [clearTimer, scatter, setPhaseSync]);
-
-  const handleClick = useCallback((id: CategoryId) => {
-    if (phaseRef.current === 'attract' && activeCatRef.current === id) {
-      clearTimer();
-      setPhaseSync('frame');
-      doFrame();
-      seqTimerRef.current = setTimeout(() => {
-        if (phaseRef.current !== 'frame') return;
-        setPhaseSync('open');
-      }, 400);
-      return;
+    const s = stageRef.current;
+    if (s === 'forming' || s === 'formed') {
+      sysRef.current?.applyInteraction(x, y, velX, velY);
     }
-    if (phaseRef.current === 'idle') {
-      beginSequence(id, 480);
+    if (s === 'formed' && Math.hypot(velX, velY) > 4) {
+      triggerDissolve();
     }
-  }, [clearTimer, setPhaseSync, doFrame, beginSequence]);
+  }, [triggerDissolve]);
 
-  // ── Mobile: 2-tap logic ───────────────────────────────────────────────────
-  const handleTouchBegin = useCallback((id: CategoryId) => {
-    if (phaseRef.current === 'idle') {
-      // 1st tap: select (dots gather around label, hint text appears)
-      scatter();
-      activeCatRef.current = id;
-      setActiveCategory(id);
-      setPhaseSync('selected');
-      doGather(id);
-    } else if (phaseRef.current === 'selected') {
-      if (activeCatRef.current === id) {
-        // 2nd tap on same label: frame → open
-        clearTimer();
-        setPhaseSync('frame');
-        doFrame();
-        seqTimerRef.current = setTimeout(() => {
-          if (phaseRef.current !== 'frame') return;
-          setPhaseSync('open');
-        }, 400);
-      } else {
-        // Tap a different label: scatter + new selection
-        scatter();
-        activeCatRef.current = id;
-        setActiveCategory(id);
-        doGather(id);
-        // phase stays 'selected'
-      }
+  const handlePointerUp = useCallback((x: number, y: number) => {
+    const dx = x - lastPointerRef.current.x;
+    const dy = y - lastPointerRef.current.y;
+    // Small movement = tap
+    if (Math.hypot(dx, dy) < 12 && stageRef.current === 'formed') {
+      sysRef.current?.applyInteraction(x, y, 0, 0);
+      triggerDissolve();
     }
-  }, [scatter, setPhaseSync, doGather, clearTimer, doFrame]);
+  }, [triggerDissolve]);
 
-  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
+  // ── Mouse events ───────────────────────────────────────────────────────────
+  const isDragging = useRef(false);
+
+  const onMouseDown = useCallback((e: React.MouseEvent) => {
+    isDragging.current = true;
+    handlePointerDown(e.clientX, e.clientY);
+  }, [handlePointerDown]);
+
+  const onMouseMove = useCallback((e: React.MouseEvent) => {
+    if (!isDragging.current) return;
+    handlePointerMove(e.clientX, e.clientY);
+  }, [handlePointerMove]);
+
+  const onMouseUp = useCallback((e: React.MouseEvent) => {
+    if (!isDragging.current) return;
+    isDragging.current = false;
+    handlePointerUp(e.clientX, e.clientY);
+  }, [handlePointerUp]);
+
+  // ── Touch events ───────────────────────────────────────────────────────────
+  const onTouchStart = useCallback((e: React.TouchEvent) => {
+    const t = e.touches[0];
+    handlePointerDown(t.clientX, t.clientY);
+  }, [handlePointerDown]);
+
+  const onTouchMove = useCallback((e: React.TouchEvent) => {
     e.preventDefault();
-  }, []);
+    const t = e.touches[0];
+    handlePointerMove(t.clientX, t.clientY);
+  }, [handlePointerMove]);
 
-  // Touch on background while selected → scatter to idle
-  const handleBackgroundTouch = useCallback(() => {
-    if (phaseRef.current === 'selected') {
-      clearTimer();
-      scatter();
-      activeCatRef.current = null;
-      setActiveCategory(null);
-      setPhaseSync('idle');
-    }
-  }, [clearTimer, scatter, setPhaseSync]);
+  const onTouchEnd = useCallback((e: React.TouchEvent) => {
+    const t = e.changedTouches[0];
+    handlePointerUp(t.clientX, t.clientY);
+  }, [handlePointerUp]);
 
-  // ── Close ─────────────────────────────────────────────────────────────────
-  const handleClose = useCallback(() => {
-    clearTimer();
-    scatter();
-    activeCatRef.current = null;
+  // ── Category click ────────────────────────────────────────────────────────
+  const handleCategoryClick = useCallback((id: CategoryId) => {
+    setActiveCategory(id);
+    setStageSync('panel');
+  }, [setStageSync]);
+
+  const handlePanelClose = useCallback(() => {
     setActiveCategory(null);
-    setPhaseSync('idle');
-  }, [clearTimer, scatter, setPhaseSync]);
+    setStageSync('content');
+  }, [setStageSync]);
 
-  const registerRef = useCallback((id: CategoryId, el: HTMLElement | null) => {
-    labelRefsMap.current.set(id, el);
-  }, []);
-
-  const positions  = isMobile ? MOBILE_POS : DESKTOP_POS;
-  const hasActive  = activeCategory !== null;
+  const positions = isMobile ? MOBILE_POS : DESKTOP_POS;
 
   return (
     <div
       style={{
         width: '100vw',
         height: '100dvh',
-        background: 'linear-gradient(168deg, #060810 0%, #080c18 55%, #0a0e1c 100%)',
+        background: '#f0ebe0',
         position: 'relative',
         overflow: 'hidden',
+        cursor: stage === 'forming' || stage === 'formed' ? 'crosshair' : 'default',
       }}
-      onTouchStart={handleBackgroundTouch}
+      onMouseDown={onMouseDown}
+      onMouseMove={onMouseMove}
+      onMouseUp={onMouseUp}
+      onMouseLeave={() => { isDragging.current = false; }}
+      onTouchStart={onTouchStart}
+      onTouchMove={onTouchMove}
+      onTouchEnd={onTouchEnd}
     >
-      {/* Atmospheric depth gradient */}
-      <div
-        style={{
-          position: 'absolute', inset: 0, pointerEvents: 'none',
-          background:
-            'radial-gradient(ellipse 130% 45% at 50% 92%, rgba(20,26,52,0.55) 0%, transparent 65%),' +
-            'radial-gradient(ellipse 70%  50% at 40% 40%, rgba(14,20,44,0.35) 0%, transparent 60%)',
-        }}
-      />
-
       <canvas
         ref={canvasRef}
         style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}
       />
 
-      {/* Category labels */}
-      {mounted && CATEGORIES.map(cat => (
-        <CategoryLabel
+      {/* Content labels — visible only in content/panel stage */}
+      {(stage === 'content' || stage === 'panel') && CATEGORIES.map(cat => (
+        <button
           key={cat.id}
-          category={cat}
-          position={positions[cat.id]}
-          isHighlighted={activeCategory === cat.id}
-          isDimmed={hasActive && activeCategory !== cat.id}
-          onMouseEnter={() => handleMouseEnter(cat.id)}
-          onMouseLeave={handleMouseLeave}
-          onClick={() => handleClick(cat.id)}
-          onTouchStart={() => handleTouchBegin(cat.id)}
-          onTouchEnd={handleTouchEnd}
-          registerRef={(el) => registerRef(cat.id, el)}
-        />
-      ))}
-
-      {/* Hint text: shown after 1st mobile tap (selected state) */}
-      {phase === 'selected' && (
-        <div
+          onClick={() => handleCategoryClick(cat.id as CategoryId)}
           style={{
             position: 'absolute',
-            bottom: '36px',
-            left: 0,
-            right: 0,
-            textAlign: 'center',
-            fontSize: '11px',
-            color: 'rgba(255,255,255,0.18)',
-            letterSpacing: '0.12em',
-            fontFamily: 'var(--font-sans-jp), sans-serif',
-            pointerEvents: 'none',
-            animation: 'fadeIn 0.5s ease',
+            left: positions[cat.id as CategoryId].left,
+            top: positions[cat.id as CategoryId].top,
+            transform: 'translate(-50%, -50%)',
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            padding: '14px 18px',
+            fontFamily: 'var(--font-serif-jp), "Noto Serif JP", serif',
+            fontSize: 'clamp(15px, 2.2vw, 19px)',
+            fontWeight: 300,
+            letterSpacing: '0.14em',
+            color: labelsVisible ? 'rgba(28,22,14,0.72)' : 'rgba(28,22,14,0)',
+            textShadow: 'none',
+            transition: 'color 1.8s ease',
+            WebkitTapHighlightColor: 'transparent',
+            userSelect: 'none',
+            zIndex: 10,
           }}
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(28,22,14,0.92)'; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = labelsVisible ? 'rgba(28,22,14,0.72)' : 'rgba(28,22,14,0)'; }}
         >
-          もう一度タップして開く
-        </div>
-      )}
+          {cat.label}
+        </button>
+      ))}
 
-      {/* Panel — rendered only in open phase so dots form the frame first */}
-      {phase === 'open' && activeCategory && (
+      {/* Panel */}
+      {stage === 'panel' && activeCategory && (
         <CategoryPanel
           categoryId={activeCategory}
-          onClose={handleClose}
+          onClose={handlePanelClose}
         />
       )}
     </div>
